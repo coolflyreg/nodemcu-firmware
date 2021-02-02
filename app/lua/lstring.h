@@ -13,11 +13,10 @@
 #include "lstate.h"
 
 
-#define sizestring(s) (sizeof(union TString)+(testbit(getmarked(s), READONLYBIT) ? sizeof(char **) : ((s)->len+1)*sizeof(char)))
-
+#define sizestring(s)	(sizeof(union TString)+((s)->len+1)*sizeof(char))
 #define sizeudata(u)	(sizeof(union Udata)+(u)->len)
 
-#define luaS_new(L, s)	(luaS_newlstr(L, s, c_strlen(s)))
+#define luaS_new(L, s)	(luaS_newlstr(L, s, strlen(s)))
 #define luaS_newliteral(L, s)  (luaS_newlstr(L, "" s, \
                                   (sizeof(s)/sizeof(char))-1))
 

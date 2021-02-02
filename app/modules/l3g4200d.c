@@ -6,8 +6,8 @@
 #include "module.h"
 #include "lauxlib.h"
 #include "platform.h"
-#include "c_stdlib.h"
-#include "c_string.h"
+#include <stdlib.h>
+#include <string.h>
 
 static const uint32_t i2c_id = 0;
 static const uint8_t i2c_addr = 0x69;
@@ -63,7 +63,7 @@ static int l3g4200d_read(lua_State* L) {
     for (i=0; i<5; i++) {
 	data[i] = platform_i2c_recv_byte(i2c_id, 1);
     }
-    
+
     data[5] = platform_i2c_recv_byte(i2c_id, 0);
 
     platform_i2c_send_stop(i2c_id);
@@ -79,10 +79,10 @@ static int l3g4200d_read(lua_State* L) {
     return 3;
 }
 
-static const LUA_REG_TYPE l3g4200d_map[] = {
-    { LSTRKEY( "read" ),         LFUNCVAL( l3g4200d_read )},
-    { LSTRKEY( "setup" ),        LFUNCVAL( l3g4200d_setup )},
-    { LNILKEY, LNILVAL}
-};
+LROT_BEGIN(l3g4200d, NULL, 0)
+  LROT_FUNCENTRY( read, l3g4200d_read )
+  LROT_FUNCENTRY( setup, l3g4200d_setup )
+LROT_END(l3g4200d, NULL, 0)
 
-NODEMCU_MODULE(L3G4200D, "l3g4200d", l3g4200d_map, NULL);
+
+NODEMCU_MODULE(L3G4200D, "l3g4200d", l3g4200d, NULL);

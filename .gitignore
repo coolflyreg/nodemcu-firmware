@@ -1,4 +1,6 @@
 .gdb_history
+app/lua/.std
+app/lua53/.std
 sdk/
 cache/
 .ccache/
@@ -6,6 +8,7 @@ local/
 user_config.h
 server-ca.crt
 luac.cross
+luac.cross.int
 uz_unzip
 uz_zip
 tools/toolchains/
@@ -14,3 +17,8 @@ tools/toolchains/
 .cproject
 .project
 .settings/
+.vscode
+.vs
+
+#ignore temp file for build infos
+buildinfo.h

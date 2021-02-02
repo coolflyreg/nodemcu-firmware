@@ -1,4 +1,4 @@
-# **NodeMCU 2.2.1** #
+# NodeMCU 3.0.0
 
 [![Join the chat at https://gitter.im/nodemcu/nodemcu-firmware](https://img.shields.io/gitter/room/badges/shields.svg)](https://gitter.im/nodemcu/nodemcu-firmware?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://travis-ci.org/nodemcu/nodemcu-firmware.svg)](https://travis-ci.org/nodemcu/nodemcu-firmware)
@@ -14,7 +14,7 @@ The firmware was initially developed as is a companion project to the popular ES
 # Summary
 
 - Easy to program wireless node and/or access point
-- Based on Lua 5.1.4 (without `debug` & `os` modules)
+- Based on Lua 5.1.4 but without `debug`, `io`, `os` and (most of the) `math` modules
 - Asynchronous event-driven programming model
 - more than **65 built-in modules**
 - Firmware available with or without floating point support (integer-only uses less memory)
@@ -46,7 +46,7 @@ wifi.sta.config{ssid="SSID", pwd="password"}
 
 # Documentation
 
-The entire [NodeMCU documentation](https://nodemcu.readthedocs.io) is maintained right in this repository at [/docs](docs). The fact that the API documentation is maintained in the same repository as the code that *provides* the API ensures consistency between the two. With every commit the documentation is rebuilt by Read the Docs and thus transformed from terse Markdown into a nicely browsable HTML site at [https://nodemcu.readthedocs.io](https://nodemcu.readthedocs.io). 
+The entire [NodeMCU documentation](https://nodemcu.readthedocs.io) is maintained right in this repository at [/docs](docs). The fact that the API documentation is maintained in the same repository as the code that *provides* the API ensures consistency between the two. With every commit the documentation is rebuilt by Read the Docs and thus transformed from terse Markdown into a nicely browsable HTML site at [https://nodemcu.readthedocs.io](https://nodemcu.readthedocs.io).
 
 - How to [build the firmware](https://nodemcu.readthedocs.io/en/master/en/build/)
 - How to [flash the firmware](https://nodemcu.readthedocs.io/en/master/en/flash/)
@@ -57,7 +57,7 @@ The entire [NodeMCU documentation](https://nodemcu.readthedocs.io) is maintained
 
 Due to the ever-growing number of modules available within NodeMCU, pre-built binaries are no longer made available. Use the automated [custom firmware build service](http://nodemcu-build.com/) to get the specific firmware configuration you need, or consult the [documentation](http://nodemcu.readthedocs.io/en/master/en/build/) for other options to build your own firmware.
 
-This project uses two main branches, `master` and `dev`. `dev` is actively worked on and it's also where PRs should be created against. `master` thus can be considered "stable" even though there are no automated regression tests. The goal is to merge back to `master` roughly every 2 months. Depending on the current "heat" (issues, PRs) we accept changes to `dev` for 5-6 weeks and then hold back for 2-3 weeks before the next snap is completed.
+This project uses two main branches, `release` and `dev`. `dev` is actively worked on and it's also where PRs should be created against. `release` thus can be considered "stable" even though there are no automated regression tests. The goal is to merge back to `release` roughly every 2 months. Depending on the current "heat" (issues, PRs) we accept changes to `dev` for 5-6 weeks and then hold back for 2-3 weeks before the next snap is completed.
 
 A new tag is created every time `dev` is merged back to `master`. They are listed in the [releases section here on GitHub](https://github.com/nodemcu/nodemcu-firmware/releases). Tag names follow the \<SDK-version\>-master_yyyymmdd pattern.
 

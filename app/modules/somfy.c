@@ -1,16 +1,17 @@
 // ***************************************************************************
 // Somfy module for ESP8266 with NodeMCU
-// 
+//
 // Written by Lukas Voborsky, @voborsky
 // based on https://github.com/Nickduino/Somfy_Remote
 // Somfy protocol description: https://pushstack.wordpress.com/somfy-rts-protocol/
 // and discussion: https://forum.arduino.cc/index.php?topic=208346.0
-// 
+//
 // MIT license, http://opensource.org/licenses/MIT
 // ***************************************************************************
 
 //#define NODE_DEBUG
 
+#include <stdint.h>
 #include "os_type.h"
 #include "osapi.h"
 #include "sections.h"
@@ -19,6 +20,7 @@
 #include "lauxlib.h"
 #include "lmem.h"
 #include "platform.h"
+#include "task/task.h"
 #include "hw_timer.h"
 #include "user_interface.h"
 
@@ -90,7 +92,7 @@ static void somfy_transmissionDone (task_param_t arg)
     lua_rawgeti (L, LUA_REGISTRYINDEX, lua_done_ref);
     luaL_unref (L, LUA_REGISTRYINDEX, lua_done_ref);
     lua_done_ref = LUA_NOREF;
-    lua_call (L, 0, 0);
+    luaL_pcallx (L, 0, 0);
 }
 
 static void ICACHE_RAM_ATTR sendCommand(os_param_t p) {
@@ -115,7 +117,7 @@ static void ICACHE_RAM_ATTR sendCommand(os_param_t p) {
             // delayMicroseconds(89565);
             break;
         case 2:
-            signalindex++; 
+            signalindex++;
             // no break means go directly to step 3
             // a "useless" step to allow repeating the hardware sync w/o the silence after wake-up pulse
         case 3:
@@ -162,7 +164,7 @@ static void ICACHE_RAM_ATTR sendCommand(os_param_t p) {
             else {
                 DIRECT_WRITE_LOW(pin);
             }
-            
+
             if (subindex<56) {
                 subindex++;
                 signalindex--;
@@ -219,7 +221,7 @@ static int somfy_lua_sendcommand(lua_State* L) { // pin, remote, command, rollin
     platform_gpio_mode(pin, PLATFORM_GPIO_OUTPUT, PLATFORM_GPIO_PULLUP);
 
     buildFrame(frame, remote, cmd, code);
-    
+
     if (!platform_hw_timer_init(TIMER_OWNER, FRC1_SOURCE, TRUE)) {
         // Failed to init the timer
         luaL_error(L, "Unable to initialize timer");
@@ -231,18 +233,18 @@ static int somfy_lua_sendcommand(lua_State* L) { // pin, remote, command, rollin
     return 0;
 }
 
-static const LUA_REG_TYPE somfy_map[] = {
-    { LSTRKEY( "UP" ),    LNUMVAL( SOMFY_UP ) },
-    { LSTRKEY( "DOWN" ),    LNUMVAL( SOMFY_DOWN ) },
-    { LSTRKEY( "PROG" ),    LNUMVAL( SOMFY_PROG ) },
-    { LSTRKEY( "STOP" ),    LNUMVAL( SOMFY_STOP ) },
-    { LSTRKEY( "sendcommand" ), LFUNCVAL(somfy_lua_sendcommand)},
-    { LNILKEY, LNILVAL}
-};
+LROT_BEGIN(somfy, NULL, 0)
+  LROT_NUMENTRY( UP, SOMFY_UP )
+  LROT_NUMENTRY( DOWN, SOMFY_DOWN )
+  LROT_NUMENTRY( PROG, SOMFY_PROG )
+  LROT_NUMENTRY( STOP, SOMFY_STOP )
+  LROT_FUNCENTRY( sendcommand, somfy_lua_sendcommand )
+LROT_END(somfy, NULL, 0)
+
 
 int luaopen_somfy( lua_State *L ) {
     done_taskid = task_get_id((task_callback_t) somfy_transmissionDone);
     return 0;
 }
 
-NODEMCU_MODULE(SOMFY, "somfy", somfy_map, luaopen_somfy);
+NODEMCU_MODULE(SOMFY, "somfy", somfy, luaopen_somfy);

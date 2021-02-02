@@ -1,15 +1,16 @@
 /*
  * Driver for TI Texas Instruments HDC1080 Temperature/Humidity Sensor.
- * Code By Metin KOC 
+ * Code By Metin KOC
  * Sixfab Inc. metin@sixfab.com
  * Code based on ADXL345 driver.
  */
 #include "module.h"
 #include "lauxlib.h"
 #include "platform.h"
-#include "c_stdlib.h"
-#include "c_string.h"
-#include "c_math.h"
+#include "user_interface.h"
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
 
 static const uint32_t hdc1080_i2c_id = 0;
 static const uint8_t hdc1080_i2c_addr = 0x40;
@@ -25,18 +26,18 @@ static int hdc1080_setup(lua_State* L) {
 	// Configure Sensor
     platform_i2c_send_start(hdc1080_i2c_id);
     platform_i2c_send_address(hdc1080_i2c_id, hdc1080_i2c_addr, PLATFORM_I2C_DIRECTION_TRANSMITTER);
-    platform_i2c_send_byte(hdc1080_i2c_id, HDC1080_CONFIG_REGISTER); 
+    platform_i2c_send_byte(hdc1080_i2c_id, HDC1080_CONFIG_REGISTER);
     platform_i2c_send_byte(hdc1080_i2c_id, 0x05); //Bit[10] to 1 for 11 bit resolution , Set Bit[9:8] to 01 for 11 bit resolution.
     platform_i2c_send_byte(hdc1080_i2c_id, 0x00);
     platform_i2c_send_stop(hdc1080_i2c_id);
-    
+
     return 0;
 }
 
 static int hdc1080_read(lua_State* L) {
 
     uint8_t data[2];
-    
+
     #ifdef LUA_NUMBER_INTEGRAL
     	int temp;
     	int humidity;
@@ -44,7 +45,7 @@ static int hdc1080_read(lua_State* L) {
     	float temp;
     	float humidity;
     #endif
-    
+
     int i;
 
     platform_i2c_send_start(hdc1080_i2c_id);
@@ -70,8 +71,8 @@ static int hdc1080_read(lua_State* L) {
     	temp = ((float)((data[0]<<8)|data[1])/(float)pow(2,16))*165.0f-40.0f;
     	lua_pushnumber(L, temp);
     #endif
-    
-    
+
+
     platform_i2c_send_start(hdc1080_i2c_id);
     platform_i2c_send_address(hdc1080_i2c_id, hdc1080_i2c_addr, PLATFORM_I2C_DIRECTION_TRANSMITTER);
     platform_i2c_send_byte(hdc1080_i2c_id, HDC1080_HUMIDITY_REGISTER);
@@ -95,14 +96,14 @@ static int hdc1080_read(lua_State* L) {
     	humidity = ((float)((data[0]<<8)|data[1])/(float)pow(2,16))*100.0f;
     	lua_pushnumber(L, humidity);
     #endif
-    
+
     return 2;
 }
 
-static const LUA_REG_TYPE hdc1080_map[] = {
-    { LSTRKEY( "read"  ),        LFUNCVAL( hdc1080_read )},
-    { LSTRKEY( "setup" ),        LFUNCVAL( hdc1080_setup )},
-    { LNILKEY, LNILVAL}
-};
+LROT_BEGIN(hdc1080, NULL, 0)
+  LROT_FUNCENTRY( read, hdc1080_read )
+  LROT_FUNCENTRY( setup, hdc1080_setup )
+LROT_END(hdc1080, NULL, 0)
 
-NODEMCU_MODULE(HDC1080, "hdc1080", hdc1080_map, NULL);
+
+NODEMCU_MODULE(HDC1080, "hdc1080", hdc1080, NULL);

@@ -3,7 +3,7 @@
 ** See Copyright Notice in lua.h
 */
 
-#if defined(LUA_FLASH_STORE) && !defined(lflash_h)
+#ifndef lflash_h
 #define lflash_h
 
 #include "lobject.h"
@@ -19,7 +19,7 @@
 #define FLASH_FORMAT_MASK    0xF00
 #ifdef LUA_PACK_TVALUES
 #ifdef LUA_NUMBER_INTEGRAL
-#error "LUA_PACK_TVALUES is only valid for Floating point builds" 
+#error "LUA_PACK_TVALUES is only valid for Floating point builds"
 #endif
 # define FLASH_SIG_B2 0x04
 #else
@@ -43,8 +43,5 @@ typedef struct {
 } FlashHeader;
 
 LUAI_FUNC void luaN_init (lua_State *L);
-LUAI_FUNC int  luaN_flashSetup (lua_State *L);
-LUAI_FUNC int  luaN_reload_reboot (lua_State *L);
-LUAI_FUNC int  luaN_index (lua_State *L);
 #endif
 

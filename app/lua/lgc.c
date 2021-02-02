@@ -6,10 +6,9 @@
 
 #define lgc_c
 #define LUA_CORE
-#define LUAC_CROSS_FILE
 
 #include "lua.h"
-#include C_HEADER_STRING
+#include <string.h>
 
 #include "ldebug.h"
 #include "ldo.h"
@@ -21,16 +20,11 @@
 #include "lstring.h"
 #include "ltable.h"
 #include "ltm.h"
-#include "lrotable.h"
 
 #define GCSTEPSIZE	1024u
 #define GCSWEEPMAX	40
 #define GCSWEEPCOST	10
 #define GCFINALIZECOST	100
-
-#if READONLYMASK != (1<<READONLYBIT) || (defined(LUA_FLASH_STORE) && LFSMASK  != (1<<LFSBIT))
-#error "lgc.h and object.h out of sync on READONLYMASK / LFSMASK"
-#endif
 
 #define maskmarks	cast_byte(~(bitmask(BLACKBIT)|WHITEBITS))
 
@@ -58,7 +52,6 @@
 #define markobject(g,t) { if (iswhite(obj2gco(t))) \
 		reallymarkobject(g, obj2gco(t)); }
 
-
 #define setthreshold(g)  (g->GCthreshold = (g->estimate/100) * g->gcpause)
 
 
@@ -85,7 +78,7 @@ static void reallymarkobject (global_State *g, GCObject *o) {
     case LUA_TUSERDATA: {
       Table *mt = gco2u(o)->metatable;
       gray2black(o);  /* udata are never gray */
-      if (mt && !luaR_isrotable(mt)) markobject(g, mt);
+      if (mt && isrwtable(mt)) markobject(g, mt);
       markobject(g, gco2u(o)->env);
       return;
     }
@@ -163,7 +156,6 @@ size_t luaC_separateudata (lua_State *L, int all) {
   return deadmem;
 }
 
-
 static int traversetable (global_State *g, Table *h) {
   int i;
   int weakkey = 0;
@@ -171,14 +163,14 @@ static int traversetable (global_State *g, Table *h) {
   const TValue *mode = luaO_nilobject;
 
   if (h->metatable) {
-    if (!luaR_isrotable(h->metatable))
+    if (isrwtable(h->metatable))
       markobject(g, h->metatable);
     mode = gfasttm(g, h->metatable, TM_MODE);
   }
-    
+
   if (mode && ttisstring(mode)) {  /* is there a weak mode? */
-    weakkey = (c_strchr(svalue(mode), 'k') != NULL);
-    weakvalue = (c_strchr(svalue(mode), 'v') != NULL);
+    weakkey = (strchr(svalue(mode), 'k') != NULL);
+    weakvalue = (strchr(svalue(mode), 'v') != NULL);
     if (weakkey || weakvalue) {  /* is really weak? */
       h->marked &= ~(KEYWEAK | VALUEWEAK);  /* clear bits */
       h->marked |= cast_byte((weakkey << KEYWEAKBIT) |
@@ -334,14 +326,8 @@ static l_mem propagatemark (global_State *g) {
                              sizeof(TValue) * p->sizek +
                              sizeof(LocVar) * p->sizelocvars +
                              sizeof(TString *) * p->sizeupvalues +
-                             (proto_isreadonly(p) ? 0 : sizeof(Instruction) * p->sizecode +
-#ifdef LUA_OPTIMIZE_DEBUG
-                                                         (p->packedlineinfo ?
-                                                            c_strlen(cast(char *, p->packedlineinfo))+1 :
-                                                            0));
-#else
-                                                         sizeof(int) * p->sizelineinfo);
-#endif
+                             sizeof(Instruction) * p->sizecode +
+                               (p->packedlineinfo ?  strlen(cast(char *, p->packedlineinfo))+1 : 0);
     }
     default: lua_assert(0); return 0;
   }
@@ -525,8 +511,8 @@ void luaC_freeall (lua_State *L) {
 
 static void markmt (global_State *g) {
   int i;
-  for (i=0; i<NUM_TAGS; i++)
-    if (g->mt[i] && !luaR_isrotable(g->mt[i])) markobject(g, g->mt[i]);
+  for (i=0; i<LUA_NUMTAGS; i++)
+    if (g->mt[i] && isrwtable(g->mt[i])) markobject(g, g->mt[i]);
 }
 
 
@@ -716,7 +702,7 @@ void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v) {
   global_State *g = G(L);
   lua_assert(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));
   lua_assert(g->gcstate != GCSfinalize && g->gcstate != GCSpause);
-  lua_assert(o->gch.tt != LUA_TTABLE);
+  lua_assert((gettt(o) & LUA_TMASK) != LUA_TTABLE);
   /* must keep invariant? */
   if (g->gcstate == GCSpropagate)
     reallymarkobject(g, v);  /* Restore invariant */

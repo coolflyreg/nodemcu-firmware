@@ -1,5 +1,5 @@
 --
--- If you have the LFS _init loaded then you invoke the provision by 
+-- If you have the LFS _init loaded then you invoke the provision by
 -- executing LFS.HTTP_OTA('your server','directory','image name').  Note
 -- that is unencrypted and unsigned. But the loader does validate that
 -- the image file is a valid and complete LFS image before loading.
@@ -9,11 +9,10 @@ local host, dir, image = ...
 
 local doRequest, firstRec, subsRec, finalise
 local n, total, size = 0, 0
-  
-doRequest = function(sk,hostIP)
-  if hostIP then 
-    local con = net.createConnection(net.TCP,0)
-    con:connect(80,hostIP)
+
+doRequest = function(socket, hostIP) -- luacheck: no unused
+  if hostIP then
+    local con = tls.createConnection(net.TCP,0)
     -- Note that the current dev version can only accept uncompressed LFS images
     con:on("connection",function(sck)
       local request = table.concat( {
@@ -22,12 +21,13 @@ doRequest = function(sk,hostIP)
         "Accept: application/octet-stream",
         "Accept-Encoding: identity",
         "Host: "..host,
-        "Connection: close", 
+        "Connection: close",
         "", "", }, "\r\n")
         print(request)
         sck:send(request)
         sck:on("receive",firstRec)
       end)
+    con:connect(80,hostIP)
   end
 end
 
@@ -46,7 +46,7 @@ firstRec = function (sck,rec)
     sck:close()
     print("GET failed")
   end
-end 
+end
 
 subsRec = function(sck,rec)
   total, n = total + #rec, n + 1
@@ -65,7 +65,7 @@ finalise = function(sck)
   sck:close()
   local s = file.stat(image)
   if (s and size == s.size) then
-    wifi.setmode(wifi.NULLMODE)
+    wifi.setmode(wifi.NULLMODE, false)
     collectgarbage();collectgarbage()
       -- run as separate task to maximise RAM available
     node.task.post(function() node.flashreload(image) end)

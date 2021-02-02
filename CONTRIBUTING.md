@@ -26,6 +26,13 @@ Use the platform and tools you feel most comfortable with. There are no constrai
 - [Full-fledged Linux environment](http://www.esp8266.com/wiki/doku.php?id=toolchain#how_to_setup_a_vm_to_host_your_toolchain), either physical or virtual.
 - [Docker image](https://hub.docker.com/r/marcelstoer/nodemcu-build/) which allows running the build inside the container as if you were running a build script on your local machine.
 
+## Writing Lua Code
+A great resource about writing Lua for NodeMCU can be found in [Lua Developer FAQ](https://nodemcu.readthedocs.io/en/latest/lua-developer-faq/) - make sure to read it! When you're writing your Lua code and it's not working as it should you can test it with `luacheck` tool that can help you find various types of bugs. To install it you have to install [luarocks](https://luarocks.org/) and use command `sudo luarocks install luacheck` to install the tool. Now you're ready to go! By using this command (assuming you're in `nodemcu-firmware` directory):
+
+`luacheck --config tools/luacheck_config.lua <your file to check>`
+
+you can look for bugs and problems within the code!
+
 ## Writing Documentation
 The NodeMCU documentation is maintained within the same repository as the code. The primary reason is to keep the two in sync more easily. It's thus trivial for the NodeMCU team to verify that a PR includes the necessary documentation. Furthermore, the documentation is merged automatically with the code if it moves from branch X to Y.
 
@@ -65,7 +72,7 @@ Avoid intermediate merge commits. [Rebase](https://www.atlassian.com/git/tutoria
 
 This is just one way of doing things. If you're proficient in Git matters you're free to choose your own. If you want to read more then the [GitHub chapter in the Git book](http://git-scm.com/book/en/v2/GitHub-Contributing-to-a-Project#The-GitHub-Flow) is a way to start. [GitHub's own documentation](https://help.github.com/categories/collaborating-with-issues-and-pull-requests/) contains a wealth of information as well.
 
-As a Windows or Mac user you could also resort to [GitHub Desktop](https://desktop.github.com/). It's a mature GUI application that supports most of the tasks outlined above. 
+As a Windows or Mac user you could also resort to [GitHub Desktop](https://desktop.github.com/). It's a mature GUI application that supports most of the tasks outlined above.
 
 ### Keeping your fork in sync
 You need to sync your fork with the NodeMCU upstream repository from time to time, latest before you rebase (see flow above).

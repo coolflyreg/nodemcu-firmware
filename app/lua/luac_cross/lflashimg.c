@@ -6,18 +6,15 @@
 
 #define LUAC_CROSS_FILE
 
-#include "luac_cross.h"
-#include C_HEADER_CTYPE
-#include C_HEADER_STDIO
-#include C_HEADER_STDLIB
-#include C_HEADER_STRING
+#include <ctype.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define lflashimg_c
 #define LUA_CORE
 #include "lobject.h"
 #include "lstring.h"
-#undef LUA_FLASH_STORE
-#define LUA_FLASH_STORE
 #include "lflash.h"
 #include "uzlib.h"
 
@@ -43,21 +40,21 @@ typedef unsigned int uint;
  *
  * The start address of the Lua Flash Store (LFS) is build-dependent, and the cross
  * compiler '-a' option allows the developer to fix the LFS at a defined flash memory
- * address.  Alternatively and by default the cross compilation adopts a position 
+ * address.  Alternatively and by default the cross compilation adopts a position
  * independent image format, which permits the  on-device image loader to load the LFS
  * image at an appropriate base within the flash address space. As all objects in the
- * LFS can be treated as multiples of 4-byte words, also all address fields are both 
+ * LFS can be treated as multiples of 4-byte words, also all address fields are both
  * word aligned, and any address references within the LFS are also word-aligned.
  *
  * This version adds gzip compression of the generated LFS image for more efficient
- * over-the-air (OTA) transfer, so the method of tagging address words has been 
+ * over-the-air (OTA) transfer, so the method of tagging address words has been
  * replaced by a scheme which achieves better compression: an additional bitmap
- * has been added to the image, with each bit corresponding to a word in the image 
+ * has been added to the image, with each bit corresponding to a word in the image
  * and set if the corresponding work is an address.  The addresses are stored as
  * signed relative word offsets.
  *
- * The unloader is documented in lflash.c  Note that his relocation process is 
- * skipped for absolute addressed images (which are identified by the 
+ * The unloader is documented in lflash.c  Note that his relocation process is
+ * skipped for absolute addressed images (which are identified by the
  * FLASH_SIG_ABSOLUTE bit setting in the flash signature).
  *
  * The flash image has a standard header detailed in lflash.h
@@ -102,17 +99,21 @@ static uint curOffset = 0;
  * The flashAddrTag is a bit array, one bit per flashImage word denoting
  * whether the corresponding word is a relative address.  The defines
  * are access methods for this bit array.
- */ 
+ */
 static uint flashImage[LUA_MAX_FLASH_SIZE + LUA_MAX_FLASH_SIZE/32];
 static uint *flashAddrTag = flashImage + LUA_MAX_FLASH_SIZE;
 
 #define _TW(v) (v)>>5
 #define _TB(v) (1<<((v)&0x1F))
 #define setFlashAddrTag(v) flashAddrTag[_TW(v)] |= _TB(v)
-#define getFlashAddrTag(v) ((flashAddrTag[_TW(v)]&_TB(v)) != 0) 
+#define getFlashAddrTag(v) ((flashAddrTag[_TW(v)]&_TB(v)) != 0)
 
 #define fatal luac_fatal
+#ifdef _MSC_VER
+extern void __declspec( noreturn ) luac_fatal( const char* message );
+#else
 extern void __attribute__((noreturn)) luac_fatal(const char* message);
+#endif
 
 #ifdef LOCAL_DEBUG
 #define DBG_PRINT(...) printf(__VA_ARGS__)
@@ -185,10 +186,8 @@ static void scanProtoStrings(lua_State *L, const Proto* f) {
   if (f->source)
     addTS(L, f->source);
 
-#ifdef LUA_OPTIMIZE_DEBUG
   if (f->packedlineinfo)
     addTS(L, luaS_new(L, cast(const char *, f->packedlineinfo)));
-#endif
 
   for (i = 0; i < f->sizek; i++) {
     if (ttisstring(f->k + i))
@@ -354,11 +353,7 @@ static void *flashCopy(lua_State* L, int n, const char *fmt, void *src) {
 }
 
 /* The debug optimised version has a different Proto layout */
-#ifdef LUA_OPTIMIZE_DEBUG
 #define PROTO_COPY_MASK  "AHAAAAAASIIIIIIIAI"
-#else
-#define PROTO_COPY_MASK  "AHAAAAAASIIIIIIIIAI"
-#endif
 
 /*
  * Do the actual prototype copy.
@@ -382,21 +377,17 @@ static void *functionToFlash(lua_State* L, const Proto* orig) {
   f.k = cast(TValue *, flashCopy(L, f.sizek, "V", f.k));
   f.code = cast(Instruction *, flashCopy(L, f.sizecode, "I", f.code));
 
-#ifdef LUA_OPTIMIZE_DEBUG
   if (f.packedlineinfo) {
     TString *ts=luaS_new(L, cast(const char *,f.packedlineinfo));
     f.packedlineinfo = cast(unsigned char *, resolveTString(L, ts)) + sizeof (FlashTS);
   }
-#else
-  f.lineinfo = cast(int *, flashCopy(L, f.sizelineinfo, "I", f.lineinfo));
-#endif
   f.locvars = cast(struct LocVar *, flashCopy(L, f.sizelocvars, "SII", f.locvars));
   f.upvalues = cast(TString **, flashCopy(L, f.sizeupvalues, "S", f.upvalues));
   return cast(void *, flashCopy(L, 1, PROTO_COPY_MASK, &f));
 }
 
-uint dumpToFlashImage (lua_State* L, const Proto *main, lua_Writer w, 
-                       void* data, int strip, 
+uint dumpToFlashImage (lua_State* L, const Proto *main, lua_Writer w,
+                       void* data, int strip,
                        lu_int32 address, lu_int32 maxSize) {
 // parameter strip is ignored for now
   FlashHeader *fh = cast(FlashHeader *, flashAlloc(L, sizeof(FlashHeader)));
@@ -405,7 +396,7 @@ uint dumpToFlashImage (lua_State* L, const Proto *main, lua_Writer w,
   scanProtoStrings(L, main);
   createROstrt(L,  fh);
   toFlashAddr(L, fh->mainProto, functionToFlash(L, main));
-  
+
   fh->flash_sig = FLASH_SIG + (address ? FLASH_SIG_ABSOLUTE : 0);
   fh->flash_size = curOffset*WORDSIZE;
   if (fh->flash_size>maxSize) {
@@ -413,7 +404,7 @@ uint dumpToFlashImage (lua_State* L, const Proto *main, lua_Writer w,
   }
   if (address) {  /* in absolute mode convert addresses to mapped address */
     for (i = 0 ; i < curOffset; i++)
-      if (getFlashAddrTag(i)) 
+      if (getFlashAddrTag(i))
         flashImage[i] = 4*flashImage[i] + address;
     lua_unlock(L);
     status = w(L, flashImage, fh->flash_size, data);
@@ -424,22 +415,22 @@ uint dumpToFlashImage (lua_State* L, const Proto *main, lua_Writer w,
     */
     uint oLen;
     uint8_t *oBuf;
-    
+
     int bmLen = sizeof(uint)*((curOffset+31)/32);      /* 32 flags to a word */
     memmove(flashImage+curOffset, flashAddrTag, bmLen);
-    status = uzlib_compress (&oBuf, &oLen, 
+    status = uzlib_compress (&oBuf, &oLen,
                              (const uint8_t *)flashImage, bmLen+fh->flash_size);
     if (status != UZLIB_OK) {
       luac_fatal("Out of memory during image compression");
     }
     lua_unlock(L);
  #if 0
-    status = w(L, flashImage, bmLen+fh->flash_size, data);  
+    status = w(L, flashImage, bmLen+fh->flash_size, data);
  #else
-    status = w(L, oBuf, oLen, data);    
-    free(oBuf); 
+    status = w(L, oBuf, oLen, data);
+    free(oBuf);
  #endif
-       
+
   }
   lua_lock(L);
   return status;

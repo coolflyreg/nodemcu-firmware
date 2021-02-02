@@ -4,12 +4,12 @@
 #include "lauxlib.h"
 #include "lmem.h"
 #include "user_interface.h"
-#include "c_types.h"
-#include "c_string.h"
+#include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 #include "ets_sys.h"
 #include "time.h"
 #include "rtc/rtctime.h"
-#include "stdlib.h"
 #include "mem.h"
 
 struct cronent_desc {
@@ -87,7 +87,7 @@ static int lcron_create(lua_State *L) {
   // Check arguments
   char *strdesc = (char*)luaL_checkstring(L, 1);
   void *newlist;
-  luaL_checkanyfunction(L, 2);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
   // Parse description
   struct cronent_desc desc;
   lcron_parsedesc(L, strdesc, &desc);
@@ -140,14 +140,14 @@ static int lcron_schedule(lua_State *L) {
     }
     cronent_list = newlist;
     lua_pushvalue(L, 1);
-    cronent_list[cronent_count++] = lua_ref(L, LUA_REGISTRYINDEX);
+    cronent_list[cronent_count++] = luaL_ref(L, LUA_REGISTRYINDEX);
   }
   return 0;
 }
 
 static int lcron_handler(lua_State *L) {
   cronent_ud_t *ud = luaL_checkudata(L, 1, "cron.entry");
-  luaL_checkanyfunction(L, 2);
+  luaL_checktype(L, 2, LUA_TFUNCTION);
   lua_pushvalue(L, 2);
   luaL_unref(L, LUA_REGISTRYINDEX, ud->cb_ref);
   ud->cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
@@ -176,7 +176,7 @@ static int lcron_reset(lua_State *L) {
     luaL_unref(L, LUA_REGISTRYINDEX, cronent_list[i]);
   }
   cronent_count = 0;
-  os_free(cronent_list);
+  free(cronent_list);
   cronent_list = 0;
   return 0;
 }
@@ -200,7 +200,7 @@ static void cron_handle_time(uint8_t mon, uint8_t dom, uint8_t dow, uint8_t hour
     if ((ent->desc.min  & desc.min ) == 0) continue;
     lua_rawgeti(L, LUA_REGISTRYINDEX, ent->cb_ref);
     lua_rawgeti(L, LUA_REGISTRYINDEX, cronent_list[i]);
-    lua_call(L, 1, 0);
+    luaL_pcallx(L, 1, 0);
   }
 }
 
@@ -224,20 +224,22 @@ static void cron_handle_tmr() {
   cron_handle_time(tm.tm_mon + 1, tm.tm_mday, tm.tm_wday, tm.tm_hour, tm.tm_min);
 }
 
-static const LUA_REG_TYPE cronent_map[] = {
-  { LSTRKEY( "schedule" ),   LFUNCVAL( lcron_schedule ) },
-  { LSTRKEY( "handler" ),    LFUNCVAL( lcron_handler ) },
-  { LSTRKEY( "unschedule" ), LFUNCVAL( lcron_unschedule ) },
-  { LSTRKEY( "__gc" ),       LFUNCVAL( lcron_delete ) },
-  { LSTRKEY( "__index" ),    LROVAL( cronent_map ) },
-  { LNILKEY, LNILVAL }
-};
 
-static const LUA_REG_TYPE cron_map[] = {
-  { LSTRKEY( "schedule" ),   LFUNCVAL( lcron_create ) },
-  { LSTRKEY( "reset" ),      LFUNCVAL( lcron_reset ) },
-  { LNILKEY, LNILVAL }
-};
+
+LROT_BEGIN(cronent, NULL, LROT_MASK_GC_INDEX)
+  LROT_FUNCENTRY( __gc, lcron_delete )
+  LROT_TABENTRY(  __index, cronent )
+  LROT_FUNCENTRY( schedule, lcron_schedule )
+  LROT_FUNCENTRY( handler, lcron_handler )
+  LROT_FUNCENTRY( unschedule, lcron_unschedule )
+LROT_END(cronent, NULL, LROT_MASK_GC_INDEX)
+
+
+LROT_BEGIN(cron, NULL, 0)
+  LROT_FUNCENTRY( schedule, lcron_create )
+  LROT_FUNCENTRY( reset, lcron_reset )
+LROT_END(cron, NULL, 0)
+
 #include "pm/swtimer.h"
 
 int luaopen_cron( lua_State *L ) {
@@ -247,8 +249,8 @@ int luaopen_cron( lua_State *L ) {
     //cron_handle_tmr determines when to execute a scheduled cron job
     //My guess: To be sure to give the other modules required by cron enough time to get to a ready state, restart cron_timer.
   os_timer_arm(&cron_timer, 1000, 0);
-  luaL_rometatable(L, "cron.entry", (void *)cronent_map);
+  luaL_rometatable(L, "cron.entry", LROT_TABLEREF(cronent));
   return 0;
 }
 
-NODEMCU_MODULE(CRON, "cron", cron_map, luaopen_cron);
+NODEMCU_MODULE(CRON, "cron", cron, luaopen_cron);

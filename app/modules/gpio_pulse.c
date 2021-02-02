@@ -3,14 +3,14 @@
 #include "lmem.h"
 #include "platform.h"
 #include "user_interface.h"
-#include "c_types.h"
-#include "c_string.h"
+#include <stdint.h>
+#include <string.h>
 #include "gpio.h"
 #include "hw_timer.h"
 #include "pin_map.h"
 #include "driver/gpio16.h"
 
-#define TIMER_OWNER 'P'
+#define TIMER_OWNER (('P' << 8) + 'U')
 
 #define xstr(s) str(s)
 #define str(s) #s
@@ -45,7 +45,7 @@ typedef struct {
 
 static int active_pulser_ref;
 static pulse_t *active_pulser;
-static task_handle_t tasknumber;
+static platform_task_handle_t tasknumber;
 
 static int gpio_pulse_push_state(lua_State *L, pulse_t *pulser) {
   uint32_t now;
@@ -92,7 +92,7 @@ static int gpio_pulse_stop(lua_State *L) {
   int32_t stop_pos = -2;
 
   if (lua_type(L, argno) == LUA_TNUMBER) {
-    stop_pos = luaL_checkinteger(L, 2);  
+    stop_pos = luaL_checkinteger(L, 2);
     if (stop_pos != -2) {
       if (stop_pos < 1 || stop_pos > pulser->entry_count) {
         return luaL_error( L, "bad stop position: %d (valid range 1 - %d)", stop_pos, pulser->entry_count );
@@ -102,7 +102,7 @@ static int gpio_pulse_stop(lua_State *L) {
     argno++;
   }
 
-  if (lua_type(L, argno) == LUA_TFUNCTION || lua_type(L, argno) == LUA_TLIGHTFUNCTION) {
+  if (lua_isfunction(L, argno)) {
     lua_pushvalue(L, argno);
   } else {
     return luaL_error( L, "missing callback" );
@@ -201,7 +201,7 @@ static int gpio_pulse_build(lua_State *L) {
   luaL_checktype(L, 1, LUA_TTABLE);
 
   // First figure out how big we need the block to be
-  size_t size = luaL_getn(L, 1);
+  size_t size = lua_objlen(L, 1);
 
   if (size > 100) {
     return luaL_error(L, "table is too large: %d entries is more than 100", size);
@@ -235,7 +235,7 @@ static int gpio_pulse_build(lua_State *L) {
 
 static int gpio_pulse_update(lua_State *L) {
   pulse_t *pulser = luaL_checkudata(L, 1, "gpio.pulse");
-  int entry_pos = luaL_checkinteger(L, 2);  
+  int entry_pos = luaL_checkinteger(L, 2);
 
   if (entry_pos < 1 || entry_pos > pulser->entry_count) {
     return luaL_error(L, "entry number must be in range 1 .. %d", pulser->entry_count);
@@ -321,7 +321,7 @@ static void ICACHE_RAM_ATTR gpio_pulse_timeout(os_param_t p) {
         active_pulser->steps++;
       }
       platform_hw_timer_close(TIMER_OWNER);
-      task_post_low(tasknumber, (task_param_t)0);
+      platform_post_low(tasknumber, 0);
       return;
     }
     active_pulser->steps++;
@@ -341,7 +341,7 @@ static void ICACHE_RAM_ATTR gpio_pulse_timeout(os_param_t p) {
     int16_t stop = active_pulser->stop_pos;
     if (stop == -2 || stop == active_pulser->entry_pos) {
       platform_hw_timer_close(TIMER_OWNER);
-      task_post_low(tasknumber, (task_param_t)0);
+      platform_post_low(tasknumber, 0);
       return;
     }
 
@@ -368,8 +368,8 @@ static void ICACHE_RAM_ATTR gpio_pulse_timeout(os_param_t p) {
       delay_offset = ((0x7fffffff & (now - active_pulser->desired_end_time)) << 1) >> 1;
       delay -= delay_offset;
       delay += offset;
-      //dbg_printf("%d(et %d diff %d): Delay was %d us, offset = %d, delay_offset = %d, new delay = %d, range=%d..%d\n", 
-      //           now, active_pulser->desired_end_time, now - active_pulser->desired_end_time, 
+      //dbg_printf("%d(et %d diff %d): Delay was %d us, offset = %d, delay_offset = %d, new delay = %d, range=%d..%d\n",
+      //           now, active_pulser->desired_end_time, now - active_pulser->desired_end_time,
       //           entry->delay, offset, delay_offset, delay, entry->delay_min, entry->delay_max);
       if (delay < entry->delay_min) {
         // we can't delay as little as 'delay', so we need to adjust
@@ -387,7 +387,7 @@ static void ICACHE_RAM_ATTR gpio_pulse_timeout(os_param_t p) {
     active_pulser->desired_end_time += delay + delay_offset;
     active_pulser->expected_end_time = system_get_time() + delay;
   } while (delay < 3);
-  
+
   if (delay > 1200000) {
     active_pulser->pending_delay = delay - 1000000;
     delay = 1000000;
@@ -410,13 +410,15 @@ static int gpio_pulse_start(lua_State *L) {
     argno++;
   }
 
-  if (lua_type(L, argno) == LUA_TFUNCTION || lua_type(L, argno) == LUA_TLIGHTFUNCTION) {
+  if (lua_isfunction(L, argno)) {
     lua_pushvalue(L, argno);
   } else {
     return luaL_error( L, "missing callback" );
   }
 
-  luaL_unref(L, LUA_REGISTRYINDEX, pulser->cb_ref);
+  if (pulser->cb_ref) {
+    luaL_unref(L, LUA_REGISTRYINDEX, pulser->cb_ref);
+  }
   pulser->cb_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 
   active_pulser = pulser;
@@ -434,7 +436,7 @@ static int gpio_pulse_start(lua_State *L) {
   pulser->next_adjust = initial_adjust;
 
   // Now start things up
-  if (!platform_hw_timer_init(TIMER_OWNER, FRC1_SOURCE, TRUE)) {
+  if (!platform_hw_timer_init(TIMER_OWNER, FRC1_SOURCE, FALSE)) {
     // Failed to init the timer
     luaL_error(L, "Unable to initialize timer");
   }
@@ -446,7 +448,7 @@ static int gpio_pulse_start(lua_State *L) {
   return 0;
 }
 
-static void gpio_pulse_task(os_param_t param, uint8_t prio) 
+static void gpio_pulse_task(os_param_t param, uint8_t prio)
 {
   (void) param;
   (void) prio;
@@ -463,35 +465,34 @@ static void gpio_pulse_task(os_param_t param, uint8_t prio)
     active_pulser_ref = LUA_NOREF;
     luaL_unref(L, LUA_REGISTRYINDEX, pulser_ref);
 
-    lua_call(L, rc, 0);
+    luaL_pcallx(L, rc, 0);
   }
 }
 
-static const LUA_REG_TYPE pulse_map[] = {
-  { LSTRKEY( "getstate" ),            LFUNCVAL( gpio_pulse_getstate ) },
-  { LSTRKEY( "stop" ),                LFUNCVAL( gpio_pulse_stop ) },
-  { LSTRKEY( "cancel" ),              LFUNCVAL( gpio_pulse_cancel ) },
-  { LSTRKEY( "start" ),               LFUNCVAL( gpio_pulse_start ) },
-  { LSTRKEY( "adjust" ),              LFUNCVAL( gpio_pulse_adjust ) },
-  { LSTRKEY( "update" ),              LFUNCVAL( gpio_pulse_update ) },
-  { LSTRKEY( "__gc" ),                LFUNCVAL( gpio_pulse_delete ) },
-  { LSTRKEY( "__index" ),             LROVAL( pulse_map ) },
-  { LNILKEY, LNILVAL }
-};
 
-const LUA_REG_TYPE gpio_pulse_map[] =
-{
-  { LSTRKEY( "build" ),               LFUNCVAL( gpio_pulse_build ) },
-  { LSTRKEY( "__index" ),             LROVAL( gpio_pulse_map ) },
-  { LNILKEY, LNILVAL }
-};
+LROT_BEGIN(pulse, NULL, LROT_MASK_GC_INDEX)
+  LROT_FUNCENTRY( __gc, gpio_pulse_delete )
+  LROT_TABENTRY(  __index, pulse )
+  LROT_FUNCENTRY( getstate, gpio_pulse_getstate )
+  LROT_FUNCENTRY( stop, gpio_pulse_stop )
+  LROT_FUNCENTRY( cancel, gpio_pulse_cancel )
+  LROT_FUNCENTRY( start, gpio_pulse_start )
+  LROT_FUNCENTRY( adjust, gpio_pulse_adjust )
+  LROT_FUNCENTRY( update, gpio_pulse_update )
+LROT_END(pulse, NULL, LROT_MASK_GC_INDEX)
+
+
+LROT_BEGIN(gpio_pulse, NULL, 0)
+  LROT_FUNCENTRY( build, gpio_pulse_build )
+LROT_END(gpio_pulse, NULL, 0)
+
 
 int gpio_pulse_init(lua_State *L)
 {
-  luaL_rometatable(L, "gpio.pulse", (void *)pulse_map);
-  tasknumber = task_get_id(gpio_pulse_task);
+  luaL_rometatable(L, "gpio.pulse", LROT_TABLEREF(pulse));
+  tasknumber = platform_task_get_id(gpio_pulse_task);
   return 0;
 }
 
-//NODEMCU_MODULE(GPIOPULSE, "gpiopulse", gpio_pulse_map, gpio_pulse_init);
+NODEMCU_MODULE(GPIOPULSE, "gpiopulse", gpio_pulse, gpio_pulse_init);
 
